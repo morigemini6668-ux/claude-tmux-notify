@@ -24,14 +24,32 @@ async function which($: EngineInterface, name: string) {
   return bin !== '' && isSafe(bin) ? bin : undefined
 }
 
+async function frontmostApp($: EngineInterface) {
+  const front = await $.process
+    .run(['/bin/sh', '-c', '/usr/bin/lsappinfo info -only bundleid "$(/usr/bin/lsappinfo front)"'], { timeoutMs: 3000 })
+    .catch(() => undefined)
+  return front?.stdout.match(/"CFBundleIdentifier"="([^"]*)"/)?.[1]
+}
+
+// The terminal is the frontmost app and, inside tmux, this session's pane is on screen
+async function isWatching($: EngineInterface, terminalApp: string, paneQuery: readonly string[] | undefined) {
+  if (terminalApp === '' || (await frontmostApp($)) !== terminalApp) return false
+  if (paneQuery === undefined) return true
+  const shown = await $.process.run(paneQuery, { timeoutMs: 3000 }).catch(() => undefined)
+  const [paneActive, windowActive, attached] = shown?.exitCode === 0 ? shown.stdout.trim().split(' ') : []
+  return paneActive === '1' && windowActive === '1' && Number(attached) > 0
+}
+
 export const register: Register = (on, options) => {
   const sound = String(options.sound ?? 'Glass').trim()
   const terminalApp = String(options.terminalApp ?? 'com.mitchellh.ghostty').trim()
   const previewLength = Number(options.previewLength ?? 120) || 120
+  const skipWhenWatching = options.skipWhenWatching !== false
 
   let folder = ''
   let notifier: string | undefined
   let jump: string | undefined
+  let paneQuery: string[] | undefined
   let group = ''
 
   on('session.start', async ($, e, next) => {
@@ -47,9 +65,11 @@ export const register: Register = (on, options) => {
     if (tmux !== undefined && pane !== undefined && socket !== undefined && isSafe(socket)) {
       const t = `${quote(tmux)} -S ${quote(socket)}`
       group = `claude-${pane}`
+      paneQuery = [tmux, '-S', socket, 'display-message', '-p', '-t', pane, '#{pane_active} #{window_active} #{session_attached}']
       jump = `${t} switch-client -t ${quote(pane)}; ${t} select-window -t ${quote(pane)}; ${t} select-pane -t ${quote(pane)}`
     } else {
       jump = undefined
+      paneQuery = undefined
     }
     return started
   })
@@ -57,6 +77,7 @@ export const register: Register = (on, options) => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId !== undefined || e.reason === 'aborted') return done
+    if (skipWhenWatching && (await isWatching($, terminalApp, paneQuery))) return done
 
     const title = `Claude · ${folder} — ${REASONS[e.reason]}`
     const body = e.answer.replace(/\s+/g, ' ').trim().slice(0, previewLength) || REASONS[e.reason]

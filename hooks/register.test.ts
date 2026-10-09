@@ -5,9 +5,9 @@ const base = { durationMs: 10, isAborted: false, turnId: 't1' }
 const start = { cwd: '/Users/me/golf-score', surface: 'terminal', isInteractive: true } as const
 const BINS: Record<string, string> = { 'terminal-notifier': '/opt/homebrew/bin/terminal-notifier', tmux: '/opt/homebrew/bin/tmux' }
 
-type World = { env?: Record<string, string>; bins?: Record<string, string>; notifierExit?: number }
+type World = { env?: Record<string, string>; bins?: Record<string, string>; notifierExit?: number; front?: string; pane?: string }
 
-function world(on: On, { env = {}, bins = BINS, notifierExit = 0 }: World = {}) {
+function world(on: On, { env = {}, bins = BINS, notifierExit = 0, front = 'com.apple.Safari', pane = '1 1 1' }: World = {}) {
   const shown: (readonly string[])[] = []
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('env.get', ($, e) => ({ value: env[e.name] }))
@@ -16,6 +16,8 @@ function world(on: On, { env = {}, bins = BINS, notifierExit = 0 }: World = {}) 
     const result = (exitCode: number, stdout = '') =>
       ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
     if (cmd === '/usr/bin/which') return bins[arg ?? ''] !== undefined ? result(0, `${bins[arg ?? '']}\n`) : result(1)
+    if (cmd === '/bin/sh' && e.argv[2]?.includes('lsappinfo')) return result(0, `"CFBundleIdentifier"="${front}"\n`)
+    if (cmd?.endsWith('/tmux') && e.argv.includes('display-message')) return result(0, `${pane}\n`)
     shown.push(e.argv)
     return result(cmd?.endsWith('terminal-notifier') ? notifierExit : 0)
   })
@@ -89,4 +91,41 @@ test('stays quiet for subagents and interrupts', async ($, on) => {
   await $.turn.complete({ ...base, answer: 'x', reason: 'answer', agentId: 'a1' })
   await $.turn.complete({ ...base, answer: '', reason: 'aborted', isAborted: true })
   expect(shown.length).toBe(0)
+})
+
+const GHOSTTY = 'com.mitchellh.ghostty'
+
+test('no notification while the terminal is in front showing this pane', async ($, on) => {
+  const shown = world(on, { env: tmuxEnv, front: GHOSTTY, pane: '1 1 1' })
+  await $.session.start(start)
+  await $.turn.complete({ ...base, answer: 'ok', reason: 'answer' })
+  expect(shown.length).toBe(0)
+})
+
+test('notifies while the terminal is in front but shows another tmux window', async ($, on) => {
+  const shown = world(on, { env: tmuxEnv, front: GHOSTTY, pane: '1 0 1' })
+  await $.session.start(start)
+  await $.turn.complete({ ...base, answer: 'ok', reason: 'answer' })
+  expect(shown.length).toBe(1)
+})
+
+test('notifies while another app is in front', async ($, on) => {
+  const shown = world(on, { env: tmuxEnv, front: 'com.kakao.KakaoTalkMac' })
+  await $.session.start(start)
+  await $.turn.complete({ ...base, answer: 'ok', reason: 'answer' })
+  expect(shown.length).toBe(1)
+})
+
+test('outside tmux the terminal in front counts as watching', async ($, on) => {
+  const shown = world(on, { front: GHOSTTY })
+  await $.session.start(start)
+  await $.turn.complete({ ...base, answer: 'ok', reason: 'answer' })
+  expect(shown.length).toBe(0)
+})
+
+test('skipWhenWatching off always notifies', { options: { skipWhenWatching: false } }, async ($, on) => {
+  const shown = world(on, { env: tmuxEnv, front: GHOSTTY })
+  await $.session.start(start)
+  await $.turn.complete({ ...base, answer: 'ok', reason: 'answer' })
+  expect(shown.length).toBe(1)
 })

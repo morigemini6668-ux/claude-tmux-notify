@@ -1,8 +1,10 @@
 {
   "name": "tmux-notify",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "macOS notification when Claude finishes a turn; clicking it brings your terminal forward and jumps to the session's tmux pane",
-  "author": { "name": "morigemini6668-ux" },
+  "author": {
+    "name": "morigemini6668-ux"
+  },
   "repository": "https://github.com/morigemini6668-ux/claude-tmux-notify",
   "license": "MIT",
   "userConfig": {
@@ -23,6 +25,12 @@
       "title": "Preview length",
       "description": "How many characters of Claude's final answer the notification shows",
       "default": 120
+    },
+    "skipWhenWatching": {
+      "type": "boolean",
+      "title": "Skip when watching",
+      "description": "No notification when the terminal app is in front and, inside tmux, this session's pane is on screen",
+      "default": true
     }
   }
 }
