@@ -1,0 +1,14 @@
+{
+  "name": "claude-tmux-notify",
+  "owner": {
+    "name": "morigemini6668-ux"
+  },
+  "plugins": [
+    {
+      "name": "tmux-notify",
+      "source": "./",
+      "description": "Clickable macOS notification when Claude finishes, jumping back to its tmux pane"
+    }
+  ],
+  "description": "Clickable macOS notifications for Claude Code that jump back to the right tmux pane"
+}

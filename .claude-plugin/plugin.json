@@ -1,0 +1,28 @@
+{
+  "name": "tmux-notify",
+  "version": "0.1.0",
+  "description": "macOS notification when Claude finishes a turn; clicking it brings your terminal forward and jumps to the session's tmux pane",
+  "author": { "name": "morigemini6668-ux" },
+  "repository": "https://github.com/morigemini6668-ux/claude-tmux-notify",
+  "license": "MIT",
+  "userConfig": {
+    "sound": {
+      "type": "string",
+      "title": "Sound",
+      "description": "Notification sound: a name from /System/Library/Sounds or ~/Library/Sounds (Glass, Hero, Ping, Submarine...), or none",
+      "default": "Glass"
+    },
+    "terminalApp": {
+      "type": "string",
+      "title": "Terminal app",
+      "description": "Bundle id of the app to bring forward on click (com.mitchellh.ghostty, com.googlecode.iterm2, com.apple.Terminal, net.kovidgoyal.kitty, com.github.wez.wezterm)",
+      "default": "com.mitchellh.ghostty"
+    },
+    "previewLength": {
+      "type": "number",
+      "title": "Preview length",
+      "description": "How many characters of Claude's final answer the notification shows",
+      "default": 120
+    }
+  }
+}
