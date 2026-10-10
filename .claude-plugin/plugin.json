@@ -1,7 +1,7 @@
 {
   "name": "tmux-notify",
-  "version": "0.2.0",
-  "description": "macOS notification when Claude finishes a turn; clicking it brings your terminal forward and jumps to the session's tmux pane",
+  "version": "0.3.0",
+  "description": "macOS notification when Claude finishes a turn, asks a question or needs a permission; clicking it brings your terminal forward and jumps to the session's tmux pane",
   "author": {
     "name": "morigemini6668-ux"
   },
@@ -30,6 +30,12 @@
       "type": "boolean",
       "title": "Skip when watching",
       "description": "No notification when the terminal app is in front and, inside tmux, this session's pane is on screen",
+      "default": true
+    },
+    "notifyOnInput": {
+      "type": "boolean",
+      "title": "Notify when input is needed",
+      "description": "Also notify when Claude asks a question (AskUserQuestion) or waits on a permission prompt",
       "default": true
     }
   }

@@ -22,6 +22,8 @@ function world(on: On, { env = {}, bins = BINS, notifierExit = 0, front = 'com.a
     return result(cmd?.endsWith('terminal-notifier') ? notifierExit : 0)
   })
   on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({ result: { questions: e.questions, answers: {} } }))
+  on('classic.Notification', () => ({}))
   return shown
 }
 
@@ -128,4 +130,33 @@ test('skipWhenWatching off always notifies', { options: { skipWhenWatching: fals
   await $.session.start(start)
   await $.turn.complete({ ...base, answer: 'ok', reason: 'answer' })
   expect(shown.length).toBe(1)
+})
+
+const question = { questions: [{ question: '어떤 소리로 바꿀까요?', header: '소리', options: [], multiSelect: false }] }
+
+test('notifies when Claude asks a question', async ($, on) => {
+  const shown = world(on, { env: tmuxEnv })
+  await $.session.start(start)
+  await $.tool.call({ tool: 'AskUserQuestion', ...question })
+  expect(shown.length).toBe(1)
+  expect(flag(shown[0], '-title')).toBe('Claude · golf-score — 질문이 있어요')
+  expect(flag(shown[0], '-message')).toBe('어떤 소리로 바꿀까요?')
+})
+
+test('notifies on a permission prompt but not on the idle reminder', async ($, on) => {
+  const shown = world(on, { env: tmuxEnv })
+  await $.session.start(start)
+  await $.classic.Notification({ message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' })
+  await $.classic.Notification({ message: 'Claude is waiting for your input', notification_type: 'idle_prompt' })
+  expect(shown.length).toBe(1)
+  expect(flag(shown[0], '-title')).toBe('Claude · golf-score — 권한 확인 필요')
+  expect(flag(shown[0], '-message')).toBe('Claude needs your permission to use Bash')
+})
+
+test('notifyOnInput off keeps questions and permission prompts quiet', { options: { notifyOnInput: false } }, async ($, on) => {
+  const shown = world(on, { env: tmuxEnv })
+  await $.session.start(start)
+  await $.tool.call({ tool: 'AskUserQuestion', ...question })
+  await $.classic.Notification({ message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' })
+  expect(shown.length).toBe(0)
 })

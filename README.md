@@ -1,11 +1,12 @@
 # claude-tmux-notify
 
-A Claude Code plugin that shows a macOS notification when Claude finishes a turn.
+A Claude Code plugin that shows a macOS notification when Claude finishes a turn,
+asks you a question, or waits on a permission prompt.
 Clicking the notification brings your terminal to the front and, when Claude runs
 inside tmux, switches to the exact session, window and pane it came from.
 
-- Title: `Claude · <folder> — 작업 완료` (or 오류로 종료 / 거절됨)
-- Body: the first part of Claude's final answer
+- Title: `Claude · <folder> — 작업 완료` (or 오류로 종료 / 거절됨 / 질문이 있어요 / 권한 확인 필요)
+- Body: the first part of Claude's final answer, the question, or the permission message
 - Quiet for subagents and for turns you interrupted
 - Quiet while you are already watching: the terminal is the frontmost app and, inside tmux, the session's pane is on screen
 - Each pane keeps one notification: a newer one replaces the older
@@ -42,6 +43,7 @@ Set them on install, or later from `/config` under `tmux-notify`.
 | `sound` | `Glass` | A sound name from `/System/Library/Sounds` or `~/Library/Sounds` (Hero, Ping, Submarine, Funk, ...), or `none` for silence |
 | `terminalApp` | `com.mitchellh.ghostty` | Bundle id of the app brought forward on click: `com.googlecode.iterm2`, `com.apple.Terminal`, `net.kovidgoyal.kitty`, `com.github.wez.wezterm`, ... |
 | `previewLength` | `120` | How many characters of the answer the notification shows |
+| `notifyOnInput` | `true` | Also notify when Claude asks a question (AskUserQuestion) or waits on a permission prompt |
 | `skipWhenWatching` | `true` | Skip the notification while the terminal is in front and this session's tmux pane is the visible one (outside tmux: while the terminal is in front) |
 
 Preview a sound with `afplay /System/Library/Sounds/Hero.aiff`.

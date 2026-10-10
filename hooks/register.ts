@@ -14,6 +14,21 @@ const SCRIPT = [
 
 const REASONS = { answer: '작업 완료', aborted: '중단됨', refusal: '거절됨', error: '오류로 종료' } as const
 
+type Target = {
+  folder: string
+  group: string
+  notifier?: string
+  jump?: string
+  paneQuery?: readonly string[]
+}
+
+type Settings = {
+  sound: string
+  terminalApp: string
+  previewLength: number
+  skipWhenWatching: boolean
+}
+
 const quote = (s: string) => `'${s}'`
 const isSafe = (s: string) => !/['\n]/.test(s)
 
@@ -40,23 +55,41 @@ async function isWatching($: EngineInterface, terminalApp: string, paneQuery: re
   return paneActive === '1' && windowActive === '1' && Number(attached) > 0
 }
 
-export const register: Register = (on, options) => {
-  const sound = String(options.sound ?? 'Glass').trim()
-  const terminalApp = String(options.terminalApp ?? 'com.mitchellh.ghostty').trim()
-  const previewLength = Number(options.previewLength ?? 120) || 120
-  const skipWhenWatching = options.skipWhenWatching !== false
+async function notify($: EngineInterface, target: Target, settings: Settings, status: string, text: string) {
+  if (settings.skipWhenWatching && (await isWatching($, settings.terminalApp, target.paneQuery))) return
 
-  let folder = ''
-  let notifier: string | undefined
-  let jump: string | undefined
-  let paneQuery: string[] | undefined
-  let group = ''
+  const title = `Claude · ${target.folder} — ${status}`
+  const body = text.replace(/\s+/g, ' ').trim().slice(0, settings.previewLength) || status
+  const sound = settings.sound === '' || settings.sound.toLowerCase() === 'none' ? '' : settings.sound
+
+  if (target.notifier !== undefined) {
+    const argv = [target.notifier, '-title', title, '-message', body, '-group', target.group]
+    if (sound !== '') argv.push('-sound', sound)
+    if (settings.terminalApp !== '') argv.push('-activate', settings.terminalApp)
+    if (target.jump !== undefined) argv.push('-execute', target.jump)
+    const shown = await $.process.run(argv, { timeoutMs: 5000 }).catch(() => undefined)
+    if (shown?.exitCode === 0) return
+  }
+
+  await $.process.run(['osascript', '-e', SCRIPT, title, body, sound], { timeoutMs: 5000 }).catch(() => undefined)
+}
+
+export const register: Register = (on, options) => {
+  const settings: Settings = {
+    sound: String(options.sound ?? 'Glass').trim(),
+    terminalApp: String(options.terminalApp ?? 'com.mitchellh.ghostty').trim(),
+    previewLength: Number(options.previewLength ?? 120) || 120,
+    skipWhenWatching: options.skipWhenWatching !== false,
+  }
+  const notifyOnInput = options.notifyOnInput !== false
+
+  let target: Target = { folder: '', group: 'claude' }
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    folder = started.cwd.split('/').filter(Boolean).pop() ?? ''
-    group = `claude-${started.cwd}`
-    notifier = await which($, 'terminal-notifier')
+    const folder = started.cwd.split('/').filter(Boolean).pop() ?? ''
+    const notifier = await which($, 'terminal-notifier')
+    target = { folder, group: `claude-${started.cwd}`, notifier }
 
     // Inside tmux: the pane this session runs in, on the server it runs on
     const pane = await $.env.get('TMUX_PANE')
@@ -64,35 +97,37 @@ export const register: Register = (on, options) => {
     const tmux = pane !== undefined && /^%\d+$/.test(pane) ? await which($, 'tmux') : undefined
     if (tmux !== undefined && pane !== undefined && socket !== undefined && isSafe(socket)) {
       const t = `${quote(tmux)} -S ${quote(socket)}`
-      group = `claude-${pane}`
-      paneQuery = [tmux, '-S', socket, 'display-message', '-p', '-t', pane, '#{pane_active} #{window_active} #{session_attached}']
-      jump = `${t} switch-client -t ${quote(pane)}; ${t} select-window -t ${quote(pane)}; ${t} select-pane -t ${quote(pane)}`
-    } else {
-      jump = undefined
-      paneQuery = undefined
+      target = {
+        ...target,
+        group: `claude-${pane}`,
+        paneQuery: [tmux, '-S', socket, 'display-message', '-p', '-t', pane, '#{pane_active} #{window_active} #{session_attached}'],
+        jump: `${t} switch-client -t ${quote(pane)}; ${t} select-window -t ${quote(pane)}; ${t} select-pane -t ${quote(pane)}`,
+      }
     }
     return started
   })
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (e.agentId !== undefined || e.reason === 'aborted') return done
-    if (skipWhenWatching && (await isWatching($, terminalApp, paneQuery))) return done
-
-    const title = `Claude · ${folder} — ${REASONS[e.reason]}`
-    const body = e.answer.replace(/\s+/g, ' ').trim().slice(0, previewLength) || REASONS[e.reason]
-    const soundName = sound === '' || sound.toLowerCase() === 'none' ? '' : sound
-
-    if (notifier !== undefined) {
-      const argv = [notifier, '-title', title, '-message', body, '-group', group]
-      if (soundName !== '') argv.push('-sound', soundName)
-      if (terminalApp !== '') argv.push('-activate', terminalApp)
-      if (jump !== undefined) argv.push('-execute', jump)
-      const shown = await $.process.run(argv, { timeoutMs: 5000 }).catch(() => undefined)
-      if (shown?.exitCode === 0) return done
+    if (e.agentId === undefined && e.reason !== 'aborted') {
+      await notify($, target, settings, REASONS[e.reason], e.answer)
     }
-
-    await $.process.run(['osascript', '-e', SCRIPT, title, body, soundName], { timeoutMs: 5000 }).catch(() => undefined)
     return done
   })
+
+  // Claude stops mid-turn to ask you something: the question tool
+  on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    if (notifyOnInput && e.agentId === undefined) {
+      await notify($, target, settings, '질문이 있어요', e.questions.map(q => q.question).join(' / '))
+    }
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // ...or waits on a permission prompt
+  on('classic.Notification', async ($, e, next) => {
+    if (notifyOnInput && e.notification_type === 'permission_prompt') {
+      await notify($, target, settings, '권한 확인 필요', e.message)
+    }
+    return next(e)
+  }).catch(($, e, next) => next(e))
 }
