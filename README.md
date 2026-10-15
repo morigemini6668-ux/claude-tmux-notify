@@ -10,6 +10,8 @@ inside tmux, switches to the exact session, window and pane it came from.
 - Quiet for subagents and for turns you interrupted
 - Quiet while you are already watching: the terminal is the frontmost app and, inside tmux, the session's pane is on screen
 - Each pane keeps one notification: a newer one replaces the older
+- In Ghostty with one tmux session per tab, a click focuses the tab already attached to that session
+  instead of switching the tab in front to it; a session attached nowhere opens in a new tab
 
 ## Requirements
 
@@ -23,6 +25,9 @@ inside tmux, switches to the exact session, window and pane it came from.
   Then allow notifications for **terminal-notifier** in System Settings → Notifications.
   Without it the plugin falls back to a plain `osascript` notification (no click action).
 - tmux is optional: outside tmux a click just brings the terminal forward.
+- Ghostty 1.3 or later for the tab focus above (it uses Ghostty's AppleScript support).
+  On the first click macOS asks whether terminal-notifier may control Ghostty; allow it.
+  Without that, a click switches the tab in front to the pane, as in other terminals.
 
 ## Install
 

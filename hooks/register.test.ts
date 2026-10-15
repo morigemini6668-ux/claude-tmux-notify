@@ -40,6 +40,15 @@ test('a click brings the terminal forward and jumps to the tmux pane', async ($,
   expect(flag(shown[0], '-message')).toBe('빌드 완료했어요.')
   expect(flag(shown[0], '-sound')).toBe('Glass')
   expect(flag(shown[0], '-activate')).toBe('com.mitchellh.ghostty')
+  expect(flag(shown[0], '-execute')).toMatch(
+    /^\/bin\/sh '\/\S+\/hooks\/ghostty-jump\.sh' '\/opt\/homebrew\/bin\/tmux' '\/private\/tmp\/tmux-501\/default' '%4'$/,
+  )
+})
+
+test('other terminals switch the client in front to the tmux pane', { options: { terminalApp: 'com.googlecode.iterm2' } }, async ($, on) => {
+  const shown = world(on, { env: tmuxEnv })
+  await $.session.start(start)
+  await $.turn.complete({ ...base, answer: 'ok', reason: 'answer' })
   expect(flag(shown[0], '-execute')).toBe(
     "'/opt/homebrew/bin/tmux' -S '/private/tmp/tmux-501/default' switch-client -t '%4'; " +
       "'/opt/homebrew/bin/tmux' -S '/private/tmp/tmux-501/default' select-window -t '%4'; " +

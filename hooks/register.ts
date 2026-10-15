@@ -1,6 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 const EXTRA_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin'
+const GHOSTTY = 'com.mitchellh.ghostty'
 
 const SCRIPT = [
   'on run argv',
@@ -77,7 +78,7 @@ async function notify($: EngineInterface, target: Target, settings: Settings, st
 export const register: Register = (on, options) => {
   const settings: Settings = {
     sound: String(options.sound ?? 'Glass').trim(),
-    terminalApp: String(options.terminalApp ?? 'com.mitchellh.ghostty').trim(),
+    terminalApp: String(options.terminalApp ?? GHOSTTY).trim(),
     previewLength: Number(options.previewLength ?? 120) || 120,
     skipWhenWatching: options.skipWhenWatching !== false,
   }
@@ -97,11 +98,16 @@ export const register: Register = (on, options) => {
     const tmux = pane !== undefined && /^%\d+$/.test(pane) ? await which($, 'tmux') : undefined
     if (tmux !== undefined && pane !== undefined && socket !== undefined && isSafe(socket)) {
       const t = `${quote(tmux)} -S ${quote(socket)}`
+      // Ghostty can focus the tab already attached to the session; elsewhere switch-client moves the client in front
+      const ghosttyJump = `${$.plugin.root}/hooks/ghostty-jump.sh`
       target = {
         ...target,
         group: `claude-${pane}`,
         paneQuery: [tmux, '-S', socket, 'display-message', '-p', '-t', pane, '#{pane_active} #{window_active} #{session_attached}'],
-        jump: `${t} switch-client -t ${quote(pane)}; ${t} select-window -t ${quote(pane)}; ${t} select-pane -t ${quote(pane)}`,
+        jump:
+          settings.terminalApp === GHOSTTY && isSafe(ghosttyJump)
+            ? `/bin/sh ${quote(ghosttyJump)} ${quote(tmux)} ${quote(socket)} ${quote(pane)}`
+            : `${t} switch-client -t ${quote(pane)}; ${t} select-window -t ${quote(pane)}; ${t} select-pane -t ${quote(pane)}`,
       }
     }
     return started
