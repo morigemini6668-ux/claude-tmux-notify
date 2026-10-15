@@ -1,6 +1,6 @@
 {
   "name": "tmux-notify",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "macOS notification when Claude finishes a turn, asks a question or needs a permission; clicking it brings your terminal forward and jumps to the session's tmux pane",
   "author": {
     "name": "morigemini6668-ux"
